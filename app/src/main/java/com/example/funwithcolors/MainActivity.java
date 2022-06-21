@@ -46,7 +46,6 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
     public  HashMap<String, Integer> myColor  = new HashMap<String, Integer>();        //To store all colors on the screen, I selected hashMap , Because to find and/or add a color, the speed will be O(n)
     public List<String> keys;                                           //,help withdraw the top 5 colors
 
-
     PreviewView previewView;
 
     private Button firstBtn,secondBtn,thirdBtn,fourthBtn,fifthBtn; //I use buttons to represent the colors, the thought of adding filters for these colors, from the thought that in the future I will added the option of filters
@@ -129,17 +128,18 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
         // the displayed on the screen is converted to a bitmap, for simpler work
         Bitmap bitmap = previewView.getBitmap();
         image.close();
+        myColor.clear();    //Cleans the hashMap so the colors will not accumulate from the frames before
 
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
 
-                myColor.clear();    //Cleans the hashMap so the colors will not accumulate from the frames before
+
                 imageColor(bitmap);
 
                 //geting the top 5 variables from the hashmap
+                int colorSise =  myColor.size();
                 keys = myColor.entrySet().stream().sorted(Map.Entry.<String, Integer>comparingByValue().reversed()).limit(5).map(Map.Entry::getKey).collect(Collectors.toList());
-
 
                 if (keys.size()==5) {
                     firstBtn.setText(keys.get(0));
@@ -149,35 +149,46 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
                     fifthBtn.setText(keys.get(4));
 
 
-
-                    float percentage = ((float) myColor.get(keys.get(0))/ myColor.size()*100);
+                    float percentage = ((float) myColor.get(keys.get(0))/ myColor.size());
                     String str = String.format("%2.02f", percentage);
 
+                    /*
+                    In case the camera fails to read the colors correctly
+                    For example when pushing something in front of her, the percentage calculation is incorrect
+                    Therefore the user gets an error
+                     */
+                    if(percentage>100) {
+                        firstText.setText("Error");
+                        secondText.setText("Error");
+                        thirdText.setText("Error");
+                        fourthText.setText("Error");
+                        fifthText.setText("Error");
+                    }
+                    else {
+                        firstText.setText(str + "%");
 
-                    firstText.setText(str+"%");
+                        percentage = ((float) myColor.get(keys.get(1)) / myColor.size());
+                        str = String.format("%2.02f", percentage);
 
-                    percentage = ((float) myColor.get(keys.get(1))/ myColor.size() *100);
-                     str = String.format("%2.02f", percentage);
+                        secondText.setText(str + "%");
 
-                    secondText.setText(str+"%");
+                        percentage = ((float) myColor.get(keys.get(2)) / myColor.size());
+                        str = String.format("%2.02f", percentage);
 
-                    percentage = ((float) myColor.get(keys.get(2))/ myColor.size() *100);
-                    str = String.format("%2.02f", percentage);
-
-                    thirdText.setText(str+"%");
+                        thirdText.setText(str + "%");
 
 
-                    percentage = ((float) myColor.get(keys.get(3))/ myColor.size()*100);
-                    str = String.format("%2.02f", percentage);
+                        percentage = ((float) myColor.get(keys.get(3)) / myColor.size());
+                        str = String.format("%2.02f", percentage);
 
-                    fourthText.setText(str+"%");
+                        fourthText.setText(str + "%");
 
 
-                    percentage = ((float) myColor.get(keys.get(4))/ myColor.size()*100);
-                    str = String.format("%2.02f", percentage);
+                        percentage = ((float) myColor.get(keys.get(4)) / myColor.size());
+                        str = String.format("%2.02f", percentage);
 
-                    fifthText.setText(str+"%");
-
+                        fifthText.setText(str + "%");
+                    }
                 }
 
             }
@@ -200,28 +211,44 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 
     private void imageColor(Bitmap bmpOriginal) {
         if(bmpOriginal!=null) {
-            for (int y = 0; y < bmpOriginal.getHeight(); y=y+10) {
-                for (int x = 0; x < bmpOriginal.getWidth(); x=x+10) {
+
+            /*
+            I rounded the width and length of the image
+            Because on different devices the previewView size is different, which can cause an error with the loop
+             */
+
+            int bmpHeight = bmpOriginal.getHeight();
+            bmpHeight = bmpHeight/10;
+            bmpHeight=bmpHeight*10;
+
+            int bmpWidth = bmpOriginal.getWidth();
+            bmpWidth = bmpWidth/10;
+            bmpWidth=bmpWidth*10;
+
+            for (int y = 0; y < bmpHeight; y++) {
+                for (int x = 0; x < bmpWidth; x+=3) {
 
                     /*
-                    To speed up running times,I came from the assumption that a group of pixels next to each other, have the color , so the jumps in the loop are 10.
-                    I tested my theory , from 3600 colors in a full loop,
-                    to 3400 colors with jumps, it's 5% decrease in the amount of colors, but 100 times faster
+                    To speed up running times,I came from the assumption that in a group of pixels that are next to each other, thay most likely have the color ,
+                    so the jumps in the loop are 3, so im sample only a third of the pixels.
+                    I tested my theory , from 3327 colors in a full loop,
+                    to 2750 colors with jumps, it's 18% decrease in the amount of colors, but the improvement in performance was significant.
+                    Even on old instruments like the xiaomi note 4x, Response time was reasonable.
                      */
 
+                    /*
+                    adding to the hashmap
+                    I adding mode 3 of Y to X, To get a chessboard layout style
+                     */
+                    colorData tempcolorData = groupPixelColor(bmpOriginal,x+y%3,y);
 
-
-                    //adding to the hashmap
-                    colorData tempcolorData = groupPixelColor(bmpOriginal,x,y);
 
                     if (myColor.get(tempcolorData.getName())!=null) {
 
                         myColor.put(tempcolorData.getName(), myColor.get(tempcolorData.getName()) + 1);
-
                     }
                     else {
                         myColor.put(tempcolorData.getName(),1);
-
                     }
                 }
             }
@@ -230,28 +257,18 @@ public class MainActivity extends AppCompatActivity implements ImageAnalysis.Ana
 
     }
 
-    /*
-    In Here I use a similar assumption,Running on every 100 pixels,
-    versus running on only the 10 centers,Reduced the running time, and the decrease in the amount of colors was not significant, less than 5 percent
-     */
+
     private colorData groupPixelColor(Bitmap bmpOriginal , int x , int y){
 
         int r=0;
         int g=0;
         int b=0;
 
+        int pix = bmpOriginal.getPixel(x,y);
 
-        for(int i=0 ; i<10 ; i++) {
-
-            int pix = bmpOriginal.getPixel(x+i,y+i);
-            r += Color.red(pix);
-            g += Color.green(pix);
-            b += Color.blue(pix);
-        }
-
-        r = r/10;
-        g = g/10;
-        b = b/10;
+        r += Color.red(pix);
+        g +=  Color.green(pix);
+        b += Color.blue(pix);
 
         r=roundMyNumber(r);
         g=roundMyNumber(g);
